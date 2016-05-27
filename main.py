@@ -14,10 +14,10 @@ import xarray as xr
 def eddy_u():
     fa
 
-def d2lambda(psi,i,j,k,dlambda):
+def d2lambda(psi,i,j,k,dlambda=dlambda):
     return (psi[i+1,j,k]-psi[i-1,j,k])/(2.*dlambda)
     
-def d4lambda(psi,i,j,k,dlambda):
+def d4lambda(psi,i,j,k,dlambda=dlambda):
     return (psi[i+2,j,k]-psi[i-2,j,k])/(4.*dlambda)
 
 def m2lambda(psi,i,j,k):
@@ -26,10 +26,10 @@ def m2lambda(psi,i,j,k):
 def m4lambda(psi,i,j,k):
     return 0.5*(psi[i+2,j,k]+psi[i-2,j,k])
     
-def d2phi(psi,i,j,k,dphi):
+def d2phi(psi,i,j,k,dphi=dphi):
     return (psi[i,j+1,k]-psi[i,j-1,k])/(2.*dphi)
     
-def d4phi(psi,i,j,k,dphi):
+def d4phi(psi,i,j,k,dphi=dphi):
     return (psi[i,j+2,k]-psi[i,j-2,k])/(4.*dphi)
     
 def m2phi(psi,i,j,k):
@@ -38,14 +38,14 @@ def m2phi(psi,i,j,k):
 def m4phi(psi,i,j,k):
     return 0.5*(psi[i,j+2,k]+psi[i,j-2,k])
 
-def d2s(psi,i,j,k,ds):
+def d2s(psi,i,j,k,ds=ds):
     return (psi[i,j,k+1]-psi[i,j,k-1])/float(ds)
 
 def m2s(psi,i,j,k):
     return 0.5*(psi[i,j,k+1]+psi[i,j,k-1])
 
-def update_velocities(u,up,uf,v,vp,vf,a,T,p,w,dt,dlambda,dphi,ds,omega,lon,rho,Fl,Fph,g):
-    #update u:    
+def update_velocities(u,up,uf,v,vp,vf,a,T,R,p,w,z,dt,dlambda,dphi,ds,omega,lon,rho,Fl,Fph,g):
+    #update u: (3.57)   
     for k in u.s_stag    :
         for i in u.lambd:
             for j in u.phi:
@@ -62,7 +62,7 @@ def update_velocities(u,up,uf,v,vp,vf,a,T,p,w,dt,dlambda,dphi,ds,omega,lon,rho,F
                   term9 = 1/rho*Fl
                   uf[i,j,k]=term1+2*dt*(-term2-term3-term4+term5+term6-term7-term8+term9)
                   
-    #update v:
+    #update v: (3.58)
     for k in v.s_stag:
         for i in v.lambd:
             for j in v.phi:
@@ -80,17 +80,50 @@ def update_velocities(u,up,uf,v,vp,vf,a,T,p,w,dt,dlambda,dphi,ds,omega,lon,rho,F
                   vf[i,j,k]=term1+2*dt*(-term2-term3-term4+term5+term6-term7-term8+term9)
     return uf,u,up
     
-def pressure_tendency(pf,p,pp,dpT,g,w,a,lon,u,v,rhos,ds,dlambda,dphi):
+def pressure_tendency(pf,p,pp,dpT,g,w,a,lon,u,v,rhos,ds,dlambda,dphi,dt):
+    rhosu = rhos*u  
+    rhosv = rhos*v
     for k in p.s:
         for i in p.lambd:
             for j in p.phi:
-                term1 = dpT[i,j,k]
+                term1 = dpT[i,j]
                 term2 = g*m2s(rhos,i,j,k)*w[i,j,k]
-                term3
+                term3 = 0.0                
+                for l in xrange(k+1,u.s_stag):
+                    term3 += 1/(a*np.cos(lon[j]))*((4/3*d2lambda(rhosu,i,j,l) -
+                    1/3*d4lambda(rhosu,i,j,l)) + 
+                    (4/3*d2phi(rhosv,i,j,l)-1/3*d4phi(rhosv,i,j,l))*np.cos(lon[j]))
+                term3 *= (g*ds)
+                pf[i,j,k] = pp[i,j,k]+2*dt*(term1+term2-term3)
+                
+def prog_humidity(qf,q,qp,u,v,w,a,rho,M,Ep,lon,ds,dlambda,dphi,dt):
+    m2sq = q.copy(deep=True)    
+    for k in q.s_stag:
+        for i in q.lambd:
+            for j in q.phi:
+                m2sq[i,j,k] = m2s(q,i,j,k)
+                
+    for k in q.s_stag:
+        for i in q.lambd:
+            for j in q.phi:
+                term1 = u[i,j,k]/(a*np.cos[j])*(4/3.*d2lambda(q,i,j,k)-1/3.*d4lambda(q,i,j,k))
+                term2 = v[i,j,k]/a*(4/3.*d2phi(q,i,j,k)-1/3.*d4phi(q,i,j,k))
+                term3 = d2s(w*m2sq,i,j,k)
+                term4 = q[i,j,k]*d2s(w,i,j,k)
+                qf = qp + 2*dt*(-term1-term2-term3+term4+1/rho*M+1/rho*Ep)
+    return qf
+    
+def diag_J(J,u,v,q,p,g,rhos,a,ds,dlambda,dphi):
+    for k in J.s:
+        term1 = (u.transpose()/(a*np.cos(lon)).transpose()
+        term2 = 4/3.*
+        
+def d2l(psi):
+    psi.values=psi.roll
 
 #Constants
 pi = np.pi
-a = 
+a = 1
 #initializations
 
 nlambda = 73 #even
